@@ -1,85 +1,95 @@
 #!/bin/bash
 
-now() {
+function now() {
 	date -u +"%Y-%m-%d_%H-%M-%S"Z
 }
 
-delete_pidfile() {
-	if [ -f $PIDFILE ]; then
-		rm $PIDFILE
+function create_dirlog() {
+	if [ ! -d $log_dir ]; then
+		mkdir $log_dir
 	fi
 }
 
-create_dirlog() {
-	if [ ! -d $LOG_DIR ]; then
-		mkdir $LOG_DIR
+function finalizar_proceso() {
+	if [ -f $pidfile ]; then
+		rm $pidfile
 	fi
+	if [ $2 -eq 0 ]; then
+		echo `now` "Backup realizado OK" >> $logfile
+	else
+		echo `now` "Backup NO realizado" >> $logfile
+	fi
+	echo `now` "Proceso finalizado" >> $logfile
+	exit $1
 }
 
 #---------------------------------------------------#
-# 	PARAMETROS
-	SOURCE_HOST=
-	RSYNC_MODULE=
-	BKP_DEST_DIR=
-	RSYNC_EXCLUDE_FILE=rsync.exclude
+# 	parametros
+	source_host=<DIERCCION_IP>
+	rsync_module=<MODULO>
+	bkp_dest_dir=<DESTINO>
+	rsync_exclude_file=rsync.exclude
+	max_reintentos=24
 #---------------------------------------------------#
 
-BASE_DIR=$(dirname "$0")
-BASE_NAME=$(basename -- "$0")
-LOG_DIR=$BASE_DIR/log
-PIDFILE=`readlink -f "$0"`.pid
-LOGFILE=$LOG_DIR/$BASE_NAME'_'`now`.log
+base_dir=$(dirname "$0")
+base_name=$(basename -- "$0")
+log_dir=$base_dir/log
+pidfile=`readlink -f "$0"`.pid
+logfile=$log_dir/$base_name'_'`now`.log
+contador=1
 
 create_dirlog
 
-echo -e "----------------------------------------------------------------------------" 		>> $LOGFILE
-echo	"Proceso $0 iniciado" `now` 														>> $LOGFILE
-echo -e "----------------------------------------------------------------------------\n"	>> $LOGFILE
+echo -e "----------------------------------------------------------------------------" 		>> $logfile
+echo	"Proceso $0 iniciado" `now` 														>> $logfile
+echo -e "----------------------------------------------------------------------------\n"	>> $logfile
 
-if [ -f $PIDFILE ]; then
-	PID=$(cat $PIDFILE)
-	ps -p $PID > /dev/null 2>&1
+if [ -f $pidfile ]; then
+	pid=$(cat $pidfile)
+	ps -p $pid > /dev/null 2>&1
 	
 	if [ $? -eq 0 ]; then
-		echo "Process already running" >> $LOGFILE
-		exit 1
+		echo "ERROR: Ya existe una instanca del proceso en ejecucion" >> $logfile
+		finalizar_proceso 1 1
 	else
-		## Process not found assume not running
-		echo $$ > $PIDFILE
+		## process not found assume not running
+		echo $$ > $pidfile
 		if [ $? -ne 0 ]; then
-			echo "Could not create PID file" >> $LOGFILE
-			exit 1
+			echo "ERROR: No se puede crear el pid file" >> $logfile
+			finalizar_proceso 1 1
 		fi
 	fi
 else
-	echo $$ > $PIDFILE
+	echo $$ > $pidfile
 	if [ $? -ne 0 ]; then
-		echo "Could not create PID file" >> $LOGFILE
-		exit 1
+		echo "ERROR: No se puede crear el pid file" >> $logfile
+		finalizar_proceso 1 1
 	fi
 fi
 
-IS_ONLINE=`ping -s 1 -c 2 $SOURCE_HOST >> $LOGFILE 2>&1; echo $?`
-
-if [ $IS_ONLINE -eq 0 ]; then
-	echo -e "\nEl host" $SOURCE_HOST "esta online --> Backup iniciado" `now` >> $LOGFILE
-	rsync -vtr --timeout=15 --delete --stats --exclude-from=$BASE_DIR/$RSYNC_EXCLUDE_FILE $SOURCE_HOST::$RSYNC_MODULE $BKP_DEST_DIR/$RSYNC_MODULE >> $LOGFILE 2>&1
+while [ $contador -le $max_reintentos ]; do
 	
-	if [ $? -ne 0 ]; then
-		echo "============> ERROR <============"	>> $LOGFILE
-		echo "ERROR: rsync fallo con error code" $?	>> $LOGFILE
-		echo "Proceso finalizado" `now`				>> $LOGFILE
-		delete_pidfile
-		exit 1
-	else
-		echo "Backup finalizado" `now` >> $LOGFILE
-	fi
+	echo `now` "Intento Nro. $contador" >> $logfile
+	is_online=`ping -s 1 -c 2 $source_host > /dev/null 2>&1; echo $?`
 
-	delete_pidfile
-	exit 0
-else
-	echo "El host" $SOURCE_HOST "no esta online --> Backup no realizado" >> $LOGFILE
-	echo "Proceso finalizado" `now` >> $LOGFILE
-	delete_pidfile
-	exit 0
-fi
+	if [ $is_online -eq 0 ]; then
+		echo -e `now` "El host" $source_host "esta online --> Backup iniciado\n" >> $logfile
+
+		rsync -vtr --timeout=15 --delete --stats --exclude-from=$base_dir/$rsync_exclude_file $source_host::$rsync_module $bkp_dest_dir/$rsync_module >> $logfile 2>&1
+		
+		if [ $? -ne 0 ]; then
+			echo "ERROR: rsync fallo con error code" $?	>> $logfile
+			finalizar_proceso 1 1
+		else
+			finalizar_proceso 0 0
+		fi
+	else
+		echo -e "El host" $source_host "no esta online. Reintento...\n" >> $logfile
+	fi
+	
+	contador=`expr $contador + 1`
+	sleep 600
+done
+
+finalizar_proceso 0 1
