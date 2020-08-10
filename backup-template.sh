@@ -15,9 +15,9 @@ function finalizar_proceso() {
 		rm $pidfile
 	fi
 	if [ $2 -eq 0 ]; then
-		echo `now` "Backup realizado OK" >> $logfile
+		echo `now` "Backup completado OK" >> $logfile
 	else
-		echo `now` "Backup NO realizado" >> $logfile
+		echo `now` "Backup NO completado" >> $logfile
 	fi
 	echo `now` "Proceso finalizado" >> $logfile
 	exit $1
