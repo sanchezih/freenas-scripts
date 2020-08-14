@@ -41,9 +41,7 @@ contador=1
 
 create_dirlog
 
-echo -e "----------------------------------------------------------------------------" 		>> $logfile
-echo	"Proceso $0 iniciado" `now` 														>> $logfile
-echo -e "----------------------------------------------------------------------------\n"	>> $logfile
+echo -e "----------------------------------------------------------------------------\n" >> $logfile
 
 if [ -f $pidfile ]; then
 	pid=$(cat $pidfile)
@@ -76,7 +74,7 @@ while [ $contador -le $max_reintentos ]; do
 	if [ $is_online -eq 0 ]; then
 		echo -e `now` "El host" $source_host "esta online --> Backup iniciado\n" >> $logfile
 
-		rsync -vtr --timeout=15 --delete --stats --exclude-from=$base_dir/$rsync_exclude_file $source_host::$rsync_module $bkp_dest_dir/$rsync_module >> $logfile 2>&1
+		rsync -vtr --out-format="%t %f %'''b" --stats -h --timeout=15 --delete --exclude-from=$base_dir/$rsync_exclude_file $source_host::$rsync_module $bkp_dest_dir/$rsync_module >> $logfile 2>&1
 		
 		if [ $? -ne 0 ]; then
 			echo "ERROR: rsync fallo con error code" $?	>> $logfile
