@@ -41,6 +41,9 @@ contador=1
 
 create_dirlog
 
+echo -e "----------------------------------------------------------------------------" >> $logfile
+echo "Proceso $0 iniciado" `now` >> $logfile
+echo "Intentos = $max_reintentos" >> $logfile
 echo -e "----------------------------------------------------------------------------\n" >> $logfile
 
 if [ -f $pidfile ]; then
